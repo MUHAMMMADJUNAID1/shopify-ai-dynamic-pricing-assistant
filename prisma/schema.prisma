@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReviewFrequency {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum PricingRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum PricingRunTrigger {
+  MANUAL
+  SCHEDULED
+}
+
+enum PricingDecisionStatus {
+  UPDATED
+  SKIPPED
+  INVALID_AI_RESPONSE
+  VALIDATION_FAILED
+  SHOPIFY_UPDATE_FAILED
+}
+
+model MerchantSettings {
+  id                  String          @id @default(cuid())
+  inventoryThreshold  Int             @default(50)
+  maximumAllowedPrice Decimal         @db.Decimal(12, 2)
+  reviewFrequency     ReviewFrequency @default(DAILY)
+  aiBehaviorPrompt    String?
+  lastRunAt           DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model PricingRun {
+  id              String            @id @default(cuid())
+  status          PricingRunStatus  @default(RUNNING)
+  triggerSource   PricingRunTrigger
+  productsScanned Int               @default(0)
+  productsUpdated Int               @default(0)
+  failuresCount   Int               @default(0)
+  errorMessage    String?
+  startedAt       DateTime          @default(now())
+  finishedAt      DateTime?
+  decisions       PricingDecision[]
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+model PricingDecision {
+  id                  String                @id @default(cuid())
+  runId               String
+  shopifyProductId    String
+  shopifyVariantId    String
+  productTitle        String
+  productType         String?
+  vendor              String?
+  inventoryQuantity   Int
+  oldPrice            Decimal               @db.Decimal(12, 2)
+  recommendedNewPrice Decimal?              @db.Decimal(12, 2)
+  aiReason            String?
+  status              PricingDecisionStatus
+  message             String?
+  createdAt           DateTime              @default(now())
+  run                 PricingRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([shopifyProductId])
+  @@index([createdAt])
+  @@index([status])
+}
