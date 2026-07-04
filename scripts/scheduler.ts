@@ -1,7 +1,7 @@
 import cron from "node-cron";
 
 const appUrl = process.env.APP_URL ?? "http://localhost:3000";
-const cronSecret = process.env.CRON_SECRET;
+const cronSecret = process.env.CRON_SECRET!;
 
 if (!cronSecret) {
   throw new Error("CRON_SECRET is required to run the local scheduler.");
