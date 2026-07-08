@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { apiRequest } from "@/lib/api-client";
 
@@ -17,6 +22,16 @@ type SettingsPayload = {
   maximumAllowedPrice: number;
   reviewFrequency: ReviewFrequency;
   aiBehaviorPrompt: string | null;
+};
+
+type HistoryPage = {
+  history: PricingDecisionDto[];
+  nextCursor: string | null;
+};
+
+type RunsPage = {
+  runs: PricingRunDto[];
+  nextCursor: string | null;
 };
 
 export function useSettings() {
@@ -52,10 +67,19 @@ export function useProducts() {
 }
 
 export function usePricingHistory() {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["pricing-history"],
-    queryFn: () =>
-      apiRequest<{ history: PricingDecisionDto[] }>("/api/pricing/history"),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: "10" });
+
+      if (pageParam) {
+        params.set("cursor", pageParam);
+      }
+
+      return apiRequest<HistoryPage>(`/api/pricing/history?${params}`);
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
 }
 
@@ -68,9 +92,19 @@ export function useLatestPricingDecisions() {
 }
 
 export function usePricingRuns() {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["pricing-runs"],
-    queryFn: () => apiRequest<{ runs: PricingRunDto[] }>("/api/pricing/runs"),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: "10" });
+
+      if (pageParam) {
+        params.set("cursor", pageParam);
+      }
+
+      return apiRequest<RunsPage>(`/api/pricing/runs?${params}`);
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
 }
 

@@ -1,6 +1,36 @@
 import { requireEnv, env } from "@/server/env";
 import type { ShopifyProductForPricing } from "@/server/pricing/types";
 
+const MOCK_PRODUCTS: ShopifyProductForPricing[] = [
+  {
+    productId: "gid://shopify/Product/mock-premium-hoodie",
+    variantId: "gid://shopify/ProductVariant/mock-premium-hoodie",
+    title: "Premium Hoodie",
+    productType: "Apparel",
+    vendor: "MG Test",
+    currentPrice: 100,
+    inventoryQuantity: 10,
+  },
+  {
+    productId: "gid://shopify/Product/mock-basic-t-shirt",
+    variantId: "gid://shopify/ProductVariant/mock-basic-t-shirt",
+    title: "Basic T-Shirt",
+    productType: "Apparel",
+    vendor: "MG Test",
+    currentPrice: 25,
+    inventoryQuantity: 80,
+  },
+  {
+    productId: "gid://shopify/Product/mock-leather-bag",
+    variantId: "gid://shopify/ProductVariant/mock-leather-bag",
+    title: "Leather Bag",
+    productType: "Accessories",
+    vendor: "MG Test",
+    currentPrice: 120,
+    inventoryQuantity: 5,
+  },
+];
+
 type ShopifyGraphqlResponse<T> = {
   data?: T;
   errors?: Array<{ message: string }>;
@@ -78,6 +108,10 @@ async function shopifyGraphql<T>(
 export async function fetchProductsForPricing(
   limit = 25,
 ): Promise<ShopifyProductForPricing[]> {
+  if (env.MOCK_SHOPIFY === "true") {
+    return MOCK_PRODUCTS.slice(0, limit);
+  }
+
   const data = await shopifyGraphql<ProductsQueryResponse>(
     `#graphql
       query ProductsForPricing($first: Int!) {
@@ -107,8 +141,9 @@ export async function fetchProductsForPricing(
 
   return data.products.edges.flatMap(({ node }) => {
     const variant = node.variants.edges[0]?.node;
+    const currentPrice = Number(variant?.price);
 
-    if (!variant) {
+    if (!variant || !Number.isFinite(currentPrice)) {
       return [];
     }
 
@@ -119,7 +154,7 @@ export async function fetchProductsForPricing(
         title: node.title,
         productType: node.productType,
         vendor: node.vendor,
-        currentPrice: Number(variant.price),
+        currentPrice,
         inventoryQuantity: variant.inventoryQuantity ?? 0,
       },
     ];
@@ -131,6 +166,13 @@ export async function updateVariantPrice(input: {
   variantId: string;
   price: number;
 }) {
+  if (env.MOCK_SHOPIFY === "true") {
+    return {
+      id: input.variantId,
+      price: input.price.toFixed(2),
+    };
+  }
+
   const data = await shopifyGraphql<ProductVariantsBulkUpdateResponse>(
     `#graphql
       mutation UpdateVariantPrice($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {

@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
-import { requireEnv } from "@/server/env";
+import { env, requireEnv } from "@/server/env";
 import type {
   AiPricingRecommendation,
   ShopifyProductForPricing,
@@ -23,12 +23,49 @@ function extractJson(text: string) {
   return match?.[0] ?? trimmed;
 }
 
+export function parseAiPricingRecommendation(
+  text: string,
+): AiPricingRecommendation | null {
+  try {
+    const parsed = aiResponseSchema.safeParse(JSON.parse(extractJson(text)));
+
+    if (!parsed.success) {
+      return null;
+    }
+
+    return {
+      recommendedPrice: Number(parsed.data.recommendedPrice.toFixed(2)),
+      reason: parsed.data.reason,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function generatePricingRecommendation(input: {
   product: ShopifyProductForPricing;
   inventoryThreshold: number;
   maximumAllowedPrice: number;
   aiBehaviorPrompt?: string | null;
 }): Promise<AiPricingRecommendation | null> {
+  if (env.MOCK_GEMINI === "true") {
+    const scarcityRatio = Math.max(
+      0,
+      1 - input.product.inventoryQuantity / Math.max(input.inventoryThreshold, 1),
+    );
+    const increaseMultiplier = 1 + Math.min(0.2, scarcityRatio * 0.18);
+    const recommendedPrice = Math.min(
+      input.maximumAllowedPrice,
+      Number((input.product.currentPrice * increaseMultiplier).toFixed(2)),
+    );
+
+    return {
+      recommendedPrice,
+      reason:
+        "Mock AI recommendation based on low inventory and merchant safety rules.",
+    };
+  }
+
   const ai = new GoogleGenAI({ apiKey: requireEnv("GEMINI_API_KEY") });
   const prompt = `
 You are an AI pricing assistant for a Shopify merchant.
@@ -62,14 +99,5 @@ ${input.aiBehaviorPrompt || "Use a balanced pricing strategy."}
   });
 
   const text = response.text ?? "";
-  const parsed = aiResponseSchema.safeParse(JSON.parse(extractJson(text)));
-
-  if (!parsed.success) {
-    return null;
-  }
-
-  return {
-    recommendedPrice: Number(parsed.data.recommendedPrice.toFixed(2)),
-    reason: parsed.data.reason,
-  };
+  return parseAiPricingRecommendation(text);
 }

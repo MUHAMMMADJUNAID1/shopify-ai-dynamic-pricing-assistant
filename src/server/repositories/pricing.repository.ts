@@ -63,10 +63,19 @@ export async function createPricingDecision(input: DecisionInput) {
   });
 }
 
-export async function listPricingHistory(limit = 50) {
-  return prisma.pricingDecision.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
+export async function listPricingHistory(input: {
+  limit: number;
+  cursor?: string | null;
+}) {
+  const decisions = await prisma.pricingDecision.findMany({
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: input.limit + 1,
+    ...(input.cursor
+      ? {
+          cursor: { id: input.cursor },
+          skip: 1,
+        }
+      : {}),
     include: {
       run: {
         select: {
@@ -76,6 +85,13 @@ export async function listPricingHistory(limit = 50) {
       },
     },
   });
+
+  const nextItem = decisions.length > input.limit ? decisions.pop() : null;
+
+  return {
+    items: decisions,
+    nextCursor: nextItem?.id ?? null,
+  };
 }
 
 export async function listLatestRunDecisions() {
@@ -102,11 +118,27 @@ export async function listLatestRunDecisions() {
   });
 }
 
-export async function listPricingRuns(limit = 20) {
-  return prisma.pricingRun.findMany({
-    orderBy: { startedAt: "desc" },
-    take: limit,
+export async function listPricingRuns(input: {
+  limit: number;
+  cursor?: string | null;
+}) {
+  const runs = await prisma.pricingRun.findMany({
+    orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+    take: input.limit + 1,
+    ...(input.cursor
+      ? {
+          cursor: { id: input.cursor },
+          skip: 1,
+        }
+      : {}),
   });
+
+  const nextItem = runs.length > input.limit ? runs.pop() : null;
+
+  return {
+    items: runs,
+    nextCursor: nextItem?.id ?? null,
+  };
 }
 
 export async function clearPricingHistory() {

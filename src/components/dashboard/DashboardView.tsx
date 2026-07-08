@@ -10,6 +10,7 @@ import {
   InlineStack,
   Page,
   Text,
+  type DataTableProps,
 } from "@shopify/polaris";
 
 import {
@@ -67,30 +68,38 @@ function decisionReason(decision: PricingDecisionDto) {
 function PricingDecisionTable({
   decisions,
   emptyText,
+  includeTimestamp = false,
 }: {
   decisions: PricingDecisionDto[];
   emptyText: string;
+  includeTimestamp?: boolean;
 }) {
+  const columnContentTypes: DataTableProps["columnContentTypes"] = [
+    ...(includeTimestamp ? (["text"] as const) : []),
+    "text",
+    "numeric",
+    "numeric",
+    "numeric",
+    "text",
+    "text",
+  ];
+  const headings = [
+    ...(includeTimestamp ? ["Time"] : []),
+    "Product",
+    "Inventory",
+    "Current price",
+    "Recommended",
+    "Status",
+    "AI reason",
+  ];
+
   return (
     <>
       <DataTable
-        columnContentTypes={[
-          "text",
-          "numeric",
-          "numeric",
-          "numeric",
-          "text",
-          "text",
-        ]}
-        headings={[
-          "Product",
-          "Inventory",
-          "Current price",
-          "Recommended",
-          "Status",
-          "AI reason",
-        ]}
+        columnContentTypes={columnContentTypes}
+        headings={headings}
         rows={decisions.map((decision) => [
+          ...(includeTimestamp ? [dateTime(decision.createdAt)] : []),
           decision.productTitle,
           decision.inventoryQuantity,
           money(decision.oldPrice),
@@ -118,9 +127,12 @@ export function DashboardView() {
   const runPricingCycle = useRunPricingCycle();
   const clearPricingHistory = useClearPricingHistory();
 
-  const latestRun = runs.data?.runs[0];
+  const paginatedRuns = runs.data?.pages.flatMap((page) => page.runs) ?? [];
+  const paginatedHistory =
+    history.data?.pages.flatMap((page) => page.history) ?? [];
+  const latestRun = paginatedRuns[0];
   const latestDecisions = latestHistory.data?.history ?? [];
-  const allDecisions = history.data?.history ?? [];
+  const allDecisions = paginatedHistory;
 
   return (
     <Page
@@ -202,7 +214,7 @@ export function DashboardView() {
               </InlineStack>
               <PricingDecisionTable
                 decisions={latestDecisions}
-                emptyText="No latest run decisions yet. Run a pricing check after configuring your environment variables and settings."
+                emptyText="No latest run decisions yet."
               />
             </BlockStack>
           </Box>
@@ -219,7 +231,15 @@ export function DashboardView() {
                   <Button
                     tone="critical"
                     loading={clearPricingHistory.isPending}
-                    onClick={() => clearPricingHistory.mutate()}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Clear all pricing runs and decisions from the local database?",
+                        )
+                      ) {
+                        clearPricingHistory.mutate();
+                      }
+                    }}
                   >
                     Clear history
                   </Button>
@@ -227,8 +247,25 @@ export function DashboardView() {
               </InlineStack>
               <PricingDecisionTable
                 decisions={allDecisions}
-                emptyText="No historical pricing decisions have been recorded."
+                emptyText={
+                  history.isLoading
+                    ? "Loading pricing history..."
+                    : "No historical pricing decisions have been recorded."
+                }
+                includeTimestamp
               />
+              {history.hasNextPage ? (
+                <InlineStack align="center">
+                  <Button
+                    loading={history.isFetchingNextPage}
+                    onClick={() => {
+                      void history.fetchNextPage();
+                    }}
+                  >
+                    Load more history
+                  </Button>
+                </InlineStack>
+              ) : null}
             </BlockStack>
           </Box>
         </Card>
@@ -256,7 +293,7 @@ export function DashboardView() {
                   "Failures",
                   "Status",
                 ]}
-                rows={(runs.data?.runs ?? []).map((run) => [
+                rows={paginatedRuns.map((run) => [
                   dateTime(run.startedAt),
                   run.triggerSource,
                   run.productsScanned,
@@ -265,6 +302,25 @@ export function DashboardView() {
                   run.errorMessage ? `${run.status}: ${run.errorMessage}` : run.status,
                 ])}
               />
+              {!paginatedRuns.length ? (
+                <Text as="p" tone="subdued">
+                  {runs.isLoading
+                    ? "Loading pricing runs..."
+                    : "No pricing runs have been recorded."}
+                </Text>
+              ) : null}
+              {runs.hasNextPage ? (
+                <InlineStack align="center">
+                  <Button
+                    loading={runs.isFetchingNextPage}
+                    onClick={() => {
+                      void runs.fetchNextPage();
+                    }}
+                  >
+                    Load more runs
+                  </Button>
+                </InlineStack>
+              ) : null}
             </BlockStack>
           </Box>
         </Card>

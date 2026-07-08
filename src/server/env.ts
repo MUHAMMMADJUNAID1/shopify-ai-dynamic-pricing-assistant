@@ -8,6 +8,8 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   CRON_SECRET: z.string().min(12).optional(),
   APP_URL: z.string().url().optional(),
+  MOCK_SHOPIFY: z.enum(["true", "false"]).default("false"),
+  MOCK_GEMINI: z.enum(["true", "false"]).default("false"),
 });
 
 export const env = envSchema.parse(process.env);
